@@ -2,11 +2,11 @@
 name = "卧室开关双控大灯"
 enabled = True
 schedule = None
-trigger = {"device": "Shuai 卧室 门开关", "field": "action", "value": "single"}
-trigger2 = {"device": "Shuai 卧室开关", "field": "action", "value": "single"}
+trigger = {"device": "bedroom_door_switch", "field": "action", "value": "single"}
+trigger2 = {"device": "bedroom_switch", "field": "action", "value": "single"}
 
 
 async def run(home):
-    current = home.get("Shuai卧室灯").get("state", "OFF")
+    current = home.get("bedroom_main_light").get("state", "OFF")
     new_state = "OFF" if current == "ON" else "ON"
-    await home.set("Shuai卧室灯", {"state": new_state})
+    await home.set("bedroom_main_light", {"state": new_state})

@@ -6,4 +6,4 @@ schedule = {"time": "09:45", "weekdays": [0, 1, 2, 3, 4]}
 
 
 async def run(home):
-    await home.set("卧室背景灯", {"state": "ON", "brightness": 128})
+    await home.set("bedroom_bg_light", {"state": "ON", "brightness": 128})

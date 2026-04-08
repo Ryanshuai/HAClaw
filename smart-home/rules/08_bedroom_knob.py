@@ -5,7 +5,7 @@
 name = "卧室旋钮控灯"
 enabled = True
 schedule = None
-trigger = {"device": "卧室背景灯控制", "field": "action"}
+trigger = {"device": "bedroom_knob", "field": "action"}
 
 import asyncio
 import time
@@ -30,9 +30,9 @@ def _nearest_level(brightness: int) -> int:
 
 async def run(home):
     global _color_mode, _last_hue, _last_toggle_time, _pending_toggle
-    state = home.get("卧室背景灯控制")
+    state = home.get("bedroom_knob")
     action = state.get("action", "")
-    light = home.get("卧室背景灯")
+    light = home.get("bedroom_bg_light")
 
     # 单击：延迟执行，等看有没有 double 跟上
     if action == "toggle":
@@ -42,14 +42,14 @@ async def run(home):
 
         async def delayed_toggle():
             await asyncio.sleep(0.4)
-            lt = home.get("卧室背景灯")
+            lt = home.get("bedroom_bg_light")
             if lt.get("state", "OFF") == "ON":
-                await home.set("卧室背景灯", {"state": "OFF"})
+                await home.set("bedroom_bg_light", {"state": "OFF"})
             else:
                 payload = {"state": "ON"}
                 if lt.get("brightness", 0) < 2:
                     payload["brightness"] = 2
-                await home.set("卧室背景灯", payload)
+                await home.set("bedroom_bg_light", payload)
 
         _pending_toggle = asyncio.create_task(delayed_toggle())
 
@@ -60,9 +60,9 @@ async def run(home):
             _pending_toggle = None
         _color_mode = not _color_mode
         if _color_mode:
-            await home.set("卧室背景灯", {"color": {"hue": _last_hue, "saturation": 100}, "state": "ON"})
+            await home.set("bedroom_bg_light", {"color": {"hue": _last_hue, "saturation": 100}, "state": "ON"})
         else:
-            await home.set("卧室背景灯", {"color_temp": 325, "state": "ON"})
+            await home.set("bedroom_bg_light", {"color_temp": 325, "state": "ON"})
 
     # 旋转：调亮度（5档），第一档逆时针关灯
     elif action in ("brightness_step_up", "brightness_step_down"):
@@ -70,16 +70,16 @@ async def run(home):
         idx = _nearest_level(current_brightness)
         if action == "brightness_step_up":
             if light.get("state", "OFF") == "OFF":
-                await home.set("卧室背景灯", {"brightness": BRIGHTNESS_LEVELS[0], "state": "ON"})
+                await home.set("bedroom_bg_light", {"brightness": BRIGHTNESS_LEVELS[0], "state": "ON"})
             else:
                 idx = min(len(BRIGHTNESS_LEVELS) - 1, idx + 1)
-                await home.set("卧室背景灯", {"brightness": BRIGHTNESS_LEVELS[idx], "state": "ON"})
+                await home.set("bedroom_bg_light", {"brightness": BRIGHTNESS_LEVELS[idx], "state": "ON"})
         else:
             if idx <= 0:
-                await home.set("卧室背景灯", {"state": "OFF"})
+                await home.set("bedroom_bg_light", {"state": "OFF"})
             else:
                 idx -= 1
-                await home.set("卧室背景灯", {"brightness": BRIGHTNESS_LEVELS[idx], "state": "ON"})
+                await home.set("bedroom_bg_light", {"brightness": BRIGHTNESS_LEVELS[idx], "state": "ON"})
 
     # 按住旋转
     elif action in ("color_temperature_step_up", "color_temperature_step_down"):
@@ -89,7 +89,7 @@ async def run(home):
                 _last_hue = (_last_hue + delta) % 360
             else:
                 _last_hue = (_last_hue - delta) % 360
-            await home.set("卧室背景灯", {"color": {"hue": _last_hue, "saturation": 100}, "state": "ON"})
+            await home.set("bedroom_bg_light", {"color": {"hue": _last_hue, "saturation": 100}, "state": "ON"})
         else:
             step = state.get("action_step_size", 50)
             current_ct = light.get("color_temp", 325)
@@ -97,4 +97,4 @@ async def run(home):
                 new_ct = min(500, current_ct + step)
             else:
                 new_ct = max(150, current_ct - step)
-            await home.set("卧室背景灯", {"color_temp": new_ct, "state": "ON"})
+            await home.set("bedroom_bg_light", {"color_temp": new_ct, "state": "ON"})
