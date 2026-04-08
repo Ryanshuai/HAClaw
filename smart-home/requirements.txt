@@ -1,0 +1,5 @@
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+aiomqtt>=2.3.0
+watchdog>=4.0.0
+astral>=3.2
