@@ -1,4 +1,4 @@
-# 规则1: 自动灯光控制（合并客厅+餐厅+夜间模式）
+# 规则1: 自动灯光控制
 #
 # 白天（日出~日落前1h）：
 #   餐厅检测到人 → 开餐厅灯，无人5分钟关
@@ -8,7 +8,7 @@
 # 深夜（23:30~日出）：
 #   23:30 自动关客厅大灯
 #   任意检测到人 → 开餐厅灯，无人5分钟关
-# 开关始终 toggle 客厅大灯，关灯后1分钟冷却
+# 开关 toggle 灯，关灯后1分钟冷却（防止传感器立刻又开）
 
 import asyncio
 import time
@@ -71,8 +71,7 @@ async def run(home, device=None, payload=None):
 
     # --- 定时触发：23:30 关客厅大灯 ---
     if device is None:
-        if home.get("living_room_light").get("state") == "ON":
-            await home.set("living_room_light", {"state": "OFF"})
+        await home.set("living_room_light", {"state": "OFF"})
         return
 
     mode = _get_mode()
@@ -109,14 +108,13 @@ async def run(home, device=None, payload=None):
                 _dining_off_task.cancel()
                 _dining_off_task = None
             await _dining_on(home)
-            # 夜晚模式也开客厅大灯
             if mode == "night" and time.monotonic() >= _cooldown_until:
                 await home.set("living_room_light", {"state": "ON"})
         else:
             await _dining_off_delayed(home)
         return
 
-    # --- 其他人体检测（客厅、卧室门、厕所门）---
+    # --- 其他人体检测（客厅、卧室门、厕所） ---
     if time.monotonic() < _cooldown_until:
         return
 

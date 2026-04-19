@@ -1,0 +1,8 @@
+zigbee2mqtt/
+__pycache__/
+*.pyc
+.venv/
+*.zip
+*.db
+coordinator_backup.json
+state.json

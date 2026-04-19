@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import aiomqtt
+import holidays
 from fastapi import FastAPI, HTTPException
 
 # ---------------------------------------------------------------------------
@@ -20,6 +21,7 @@ from fastapi import FastAPI, HTTPException
 MQTT_HOST = os.getenv("MQTT_HOST", "localhost")
 MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
 RULES_DIR = Path(__file__).parent / "rules"
+_us_holidays = holidays.country_holidays("US")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("smart-home")
@@ -163,6 +165,7 @@ async def schedule_loop() -> None:
 
         now = datetime.datetime.now()
         time_str = now.strftime("%H:%M")
+        stamp = now.strftime("%Y-%m-%d %H:%M")
         weekday = now.weekday()  # 0=Mon … 6=Sun
 
         for rule_name, rule in list(rules.items()):
@@ -182,10 +185,13 @@ async def schedule_loop() -> None:
                 continue
             if sched_days is not None and weekday not in sched_days:
                 continue
-            if last_fired.get(rule_name) == time_str:
+            if sched_days is not None and sched.get("skip_holidays", True) \
+                    and now.date() in _us_holidays:
+                continue
+            if last_fired.get(rule_name) == stamp:
                 continue  # 本分钟已触发过
 
-            last_fired[rule_name] = time_str
+            last_fired[rule_name] = stamp
             try:
                 await rule["module"].run(home)
                 log.info("Schedule fired: %s", rule["name"])
