@@ -8,6 +8,7 @@
 # 深夜（23:30~日出）：
 #   23:30 自动关客厅大灯
 #   任意检测到人 → 开餐厅灯，无人5分钟关
+# 客厅大灯：所有 presence 传感器都无人，5 分钟后自动关
 # 开关 toggle 灯，关灯后1分钟冷却（防止传感器立刻又开）
 
 import asyncio
@@ -20,16 +21,23 @@ from astral.sun import sun
 name = "自动灯光"
 enabled = True
 schedule = "23:30"
-trigger = {"device": "living_room_sensor", "field": "presence", "value": True}
-trigger2 = {"device": "bedroom_door_sensor", "field": "presence", "value": True}
+trigger = {"device": "living_room_sensor", "field": "presence"}
+trigger2 = {"device": "bedroom_door_sensor", "field": "presence"}
 trigger3 = {"device": "dining_sensor", "field": "presence"}
-trigger4 = {"device": "bathroom_sensor", "field": "presence", "value": True}
+trigger4 = {"device": "bathroom_sensor", "field": "presence"}
 trigger5 = {"device": "living_room_switch", "field": "action", "value": "single"}
 trigger6 = {"device": "dining_light_switch", "field": "action", "value": "single"}
 
 _cooldown_until = 0.0
 _dining_off_task: asyncio.Task | None = None
+_living_off_task: asyncio.Task | None = None
 _dining_lights = ("dining_light_1", "dining_light_2", "dining_light_3")
+_presence_sensors = (
+    "living_room_sensor",
+    "bedroom_door_sensor",
+    "dining_sensor",
+    "bathroom_sensor",
+)
 _location = LocationInfo("Foster City", "USA", "US/Pacific", 37.5585, -122.2711)
 
 
@@ -66,11 +74,27 @@ async def _dining_off_delayed(home):
     _dining_off_task = asyncio.create_task(_do())
 
 
+async def _living_off_delayed(home):
+    await asyncio.sleep(300)
+    if any(home.get(s).get("presence", False) for s in _presence_sensors):
+        return
+    if home.get("living_room_light").get("state", "OFF") == "ON":
+        await home.set("living_room_light", {"state": "OFF"})
+
+
+def _cancel_living_off():
+    global _living_off_task
+    if _living_off_task and not _living_off_task.done():
+        _living_off_task.cancel()
+        _living_off_task = None
+
+
 async def run(home, device=None, payload=None):
-    global _cooldown_until, _dining_off_task
+    global _cooldown_until, _dining_off_task, _living_off_task
 
     # --- 定时触发：23:30 关客厅大灯 ---
     if device is None:
+        _cancel_living_off()
         await home.set("living_room_light", {"state": "OFF"})
         return
 
@@ -82,6 +106,7 @@ async def run(home, device=None, payload=None):
         if current == "ON":
             await home.set("living_room_light", {"state": "OFF"})
             _cooldown_until = time.monotonic() + 60
+            _cancel_living_off()
         else:
             await home.set("living_room_light", {"state": "ON"})
             _cooldown_until = 0.0
@@ -107,18 +132,26 @@ async def run(home, device=None, payload=None):
             if _dining_off_task and not _dining_off_task.done():
                 _dining_off_task.cancel()
                 _dining_off_task = None
-            await _dining_on(home)
-            if mode == "night" and time.monotonic() >= _cooldown_until:
-                await home.set("living_room_light", {"state": "ON"})
+            if time.monotonic() >= _cooldown_until:
+                await _dining_on(home)
+                if mode == "night":
+                    await home.set("living_room_light", {"state": "ON"})
         else:
             await _dining_off_delayed(home)
-        return
 
     # --- 其他人体检测（客厅、卧室门、厕所） ---
-    if time.monotonic() < _cooldown_until:
+    elif device in ("living_room_sensor", "bedroom_door_sensor", "bathroom_sensor"):
+        presence = payload.get("presence", False)
+        if presence and time.monotonic() >= _cooldown_until:
+            if mode == "night":
+                await home.set("living_room_light", {"state": "ON"})
+            elif mode == "late_night":
+                await _dining_on(home)
+    else:
         return
 
-    if mode == "night":
-        await home.set("living_room_light", {"state": "ON"})
-    elif mode == "late_night":
-        await _dining_on(home)
+    # --- 客厅灯延时关：所有传感器都无人时启动 5 分钟延时 ---
+    if any(home.get(s).get("presence", False) for s in _presence_sensors):
+        _cancel_living_off()
+    elif not _living_off_task or _living_off_task.done():
+        _living_off_task = asyncio.create_task(_living_off_delayed(home))
